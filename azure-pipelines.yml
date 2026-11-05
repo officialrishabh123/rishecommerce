@@ -10,6 +10,13 @@ variables:
   dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
   imageTag: '$(Build.BuildId)'
   webAppName: 'rishecommerce'
+  functionAppName: 'WebAppOrderFunction'
+  functionAppResourceGroup: 'rg-webapp-practice-dev-ci'
+  functionImageRepository: 'azure-order-processing-function'
+  functionDockerfilePath: '$(Build.SourcesDirectory)/AzureOrderProcessingWebApp/Dockerfile'
+  # The current Function App uses Linux Y1 Consumption, which supports code deployment, not custom containers.
+  # Switch to 'container' only after moving it to a Linux Premium or Dedicated plan.
+  functionDeploymentMode: 'zip'
 
 pool:
   vmImage: 'ubuntu-latest'
@@ -27,6 +34,19 @@ steps:
         $(imageTag)
         latest
 
+  - task: Docker@2
+    displayName: Build and push Azure Functions image to ACR
+    condition: and(succeeded(), eq(variables['functionDeploymentMode'], 'container'))
+    inputs:
+      command: buildAndPush
+      containerRegistry: '$(dockerRegistryServiceConnection)'
+      repository: '$(functionImageRepository)'
+      Dockerfile: '$(functionDockerfilePath)'
+      buildContext: '$(Build.SourcesDirectory)/AzureOrderProcessingWebApp'
+      tags: |
+        $(imageTag)
+        latest
+
   - task: AzureWebAppContainer@1
     displayName: Deploy image to Azure App Service
     inputs:
@@ -34,3 +54,45 @@ steps:
       appName: '$(webAppName)'
       containers: 'azurewebappacr.azurecr.io/$(imageRepository):$(imageTag)'
       appSettings: '-WEBSITES_PORT 8000'
+
+  - script: |
+      set -euo pipefail
+      function_source="$(Build.SourcesDirectory)/AzureOrderProcessingWebApp"
+      package_dir="$(Build.ArtifactStagingDirectory)/function-package"
+      zip_path="$(Build.ArtifactStagingDirectory)/azure-order-processing-function.zip"
+      rm -rf "$package_dir"
+      mkdir -p "$package_dir"
+      rsync -a \
+        --exclude='Dockerfile' \
+        --exclude='.dockerignore' \
+        --exclude='.gitignore' \
+        --exclude='.ostype' \
+        --exclude='oryx-manifest.toml' \
+        --exclude='README.md' \
+        --exclude='.python_packages/' \
+        "$function_source/" "$package_dir/"
+      (cd "$package_dir" && zip -qr "$zip_path" .)
+    displayName: Package Azure Function App for remote build
+    condition: and(succeeded(), eq(variables['functionDeploymentMode'], 'zip'))
+
+  - task: AzureCLI@2
+    displayName: Deploy Azure Function App with Azure CLI
+    condition: and(succeeded(), eq(variables['functionDeploymentMode'], 'zip'))
+    inputs:
+      azureSubscription: '$(azureResourceManagerServiceConnection)'
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        az functionapp deployment source config-zip \
+          --resource-group "$(functionAppResourceGroup)" \
+          --name "$(functionAppName)" \
+          --src "$(Build.ArtifactStagingDirectory)/azure-order-processing-function.zip" \
+          --build-remote true
+
+  - task: AzureFunctionAppContainer@1
+    displayName: Deploy Azure Functions container image
+    condition: and(succeeded(), eq(variables['functionDeploymentMode'], 'container'))
+    inputs:
+      azureSubscription: '$(azureResourceManagerServiceConnection)'
+      appName: '$(functionAppName)'
+      imageName: 'azurewebappacr.azurecr.io/$(functionImageRepository):$(imageTag)'
