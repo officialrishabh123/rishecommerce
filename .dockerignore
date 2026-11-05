@@ -1,0 +1,11 @@
+.git
+.gitignore
+.DS_Store
+app_new.zip
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.env
+.env.*
