@@ -1,5 +1,5 @@
-Flask==3.0.3
-pyodbc==5.1.0
-azure-storage-blob==12.20.0
-azure-identity==1.16.1
-gunicorn==22.0.0
+Flask
+gunicorn
+pyodbc
+azure-storage-blob
+azure-storage-queue
