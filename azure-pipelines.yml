@@ -1,0 +1,24 @@
+trigger:
+  - main
+
+resources:
+- repo: self
+
+variables:
+  dockerRegistryServiceConnection: 'db4a1360-8490-4a78-96be-48f8edc6639f'
+  imageRepository: 'webappdockerimage'
+  containerRegistry: 'azurewebappacr.azurecr.io'                 # Your image name
+  dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
+  tag: '$(Build.BuildId)'
+
+steps:
+- task: Docker@2
+  displayName: 'Build and Push Docker Image to ACR'
+  inputs:
+    command: 'buildAndPush'
+    containerRegistry: '$(dockerRegistryServiceConnection)'
+    repository: '$(imageRepository)'
+    dockerfile: '$(dockerfilePath)'
+    tags: |
+      $(tag)
+      latest
