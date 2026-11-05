@@ -5,6 +5,7 @@ trigger:
 
 variables:
   dockerRegistryServiceConnection: 'AzureEcommPipeline'
+  azureResourceManagerServiceConnection: 'AzureEcommDeploy'
   imageRepository: 'new-web-app'
   dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
   imageTag: '$(Build.BuildId)'
