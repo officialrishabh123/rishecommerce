@@ -25,3 +25,11 @@ steps:
       tags: |
         $(imageTag)
         latest
+
+   - task: AzureWebAppContainer@1
+    displayName: Deploy image to Azure App Service
+    inputs:
+      azureSubscription: '$(azureResourceManagerServiceConnection)'
+      appName: '$(webAppName)'
+      containers: 'azurewebappacr.azurecr.io/$(imageRepository):$(imageTag)'
+      appSettings: '-WEBSITES_PORT 8000'
