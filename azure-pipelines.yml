@@ -9,7 +9,7 @@ variables:
   imageRepository: 'new-web-app'
   dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
   imageTag: '$(Build.BuildId)'
-  appName: 'rishecommerce'
+  webAppName: 'rishecommerce'
 
 pool:
   vmImage: 'ubuntu-latest'
