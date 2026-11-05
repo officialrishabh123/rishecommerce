@@ -26,7 +26,7 @@ steps:
         $(imageTag)
         latest
 
-   - task: AzureWebAppContainer@1
+  - task: AzureWebAppContainer@1
     displayName: Deploy image to Azure App Service
     inputs:
       azureSubscription: '$(azureResourceManagerServiceConnection)'
