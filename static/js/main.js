@@ -1,143 +1,204 @@
 let products = [];
-let cart = [];
+let cart = loadCart();
+let activeCategory = "All items";
+let toastTimer;
 
 document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("year").textContent = new Date().getFullYear();
+    document.getElementById("product-search").addEventListener("input", renderProducts);
+    document.getElementById("sort-products").addEventListener("change", renderProducts);
+    document.getElementById("checkout-form").addEventListener("submit", submitOrder);
+    document.addEventListener("keydown", (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+            event.preventDefault();
+            document.getElementById("product-search").focus();
+        }
+        if (event.key === "Escape") toggleCart(false);
+    });
+    updateCartUI();
     loadProducts();
 });
 
-// Fetch product catalog from backend API
+function loadCart() {
+    try {
+        const saved = JSON.parse(localStorage.getItem("cloudstore-cart") || "[]");
+        return Array.isArray(saved) ? saved.filter(item => item && Number.isFinite(item.id) && Number.isFinite(item.price) && item.quantity > 0) : [];
+    } catch (_) { return []; }
+}
+
 async function loadProducts() {
     const grid = document.getElementById("product-grid");
     try {
-        const res = await fetch("/api/products");
-        if (!res.ok) throw new Error("Failed to load products");
-
-        products = await res.json();
-        renderProducts(products);
-    } catch (err) {
-        console.error("Error loading products:", err);
-        grid.innerHTML = `<p style="color:red;">Error loading catalog. Please refresh later.</p>`;
+        const response = await fetch("/api/products");
+        if (!response.ok) throw new Error("Catalog request failed");
+        products = await response.json();
+        renderCategoryFilters();
+        renderProducts();
+    } catch (error) {
+        console.error("Error loading products:", error);
+        grid.innerHTML = '<div class="empty-state"><span>◌</span><h3>We couldn’t load the collection.</h3><p>Please try again in a moment.</p><button class="text-button" onclick="loadProducts()">Try again →</button></div>';
     }
 }
 
-// Render product cards
-function renderProducts(items) {
+function renderCategoryFilters() {
+    const categories = ["All items", ...new Set(products.map(categoryForProduct))];
+    const filters = document.getElementById("category-filters");
+    if (!categories.includes(activeCategory)) activeCategory = "All items";
+    filters.innerHTML = categories.map(category => `<button type="button" class="filter-chip ${category === activeCategory ? "active" : ""}" aria-pressed="${category === activeCategory}" data-category="${escapeHTML(category)}">${escapeHTML(category)}</button>`).join("");
+    filters.querySelectorAll("[data-category]").forEach(button => button.addEventListener("click", () => selectCategory(button.dataset.category)));
+}
+
+function categoryForProduct(product) {
+    const searchable = `${product.name} ${product.description || ""}`.toLowerCase();
+    if (/speaker|headphone|audio/.test(searchable)) return "Audio";
+    if (/keyboard|mouse|webcam|hub|charger|charging|power bank/.test(searchable)) return "Accessories";
+    return "Everyday tech";
+}
+
+function selectCategory(category) {
+    activeCategory = category;
+    renderCategoryFilters();
+    renderProducts();
+}
+
+function renderProducts() {
     const grid = document.getElementById("product-grid");
-    if (items.length === 0) {
-        grid.innerHTML = "<p>No products available.</p>";
+    const query = document.getElementById("product-search").value.trim().toLowerCase();
+    const sort = document.getElementById("sort-products").value;
+    let visible = products.filter(product => {
+        const matchesCategory = activeCategory === "All items" || categoryForProduct(product) === activeCategory;
+        const matchesSearch = `${product.name} ${product.description || ""} ${product.category || ""}`.toLowerCase().includes(query);
+        return matchesCategory && matchesSearch;
+    });
+    if (sort === "price-low") visible.sort((a, b) => a.price - b.price);
+    if (sort === "price-high") visible.sort((a, b) => b.price - a.price);
+    if (sort === "name") visible.sort((a, b) => a.name.localeCompare(b.name));
+    document.getElementById("result-count").textContent = `${visible.length} ${visible.length === 1 ? "piece" : "pieces"} in the collection`;
+    if (!visible.length) {
+        grid.innerHTML = '<div class="empty-state"><span>⌕</span><h3>No matches this time.</h3><p>Try another search or browse all items.</p><button class="text-button" onclick="resetFilters()">Clear filters →</button></div>';
         return;
     }
-
-    grid.innerHTML = items.map(item => `
-        <div class="product-card">
-            <img src="${item.image_url}" alt="${item.name}" onerror="this.src='https://via.placeholder.com/300x180?text=Product'">
-            <div class="product-details">
-                <h3 class="product-title">${item.name}</h3>
-                <p class="product-desc">${item.description || ''}</p>
-                <div class="product-price-row">
-                    <span class="price">₹${item.price.toFixed(2)}</span>
-                    <button class="btn-add" onclick="addToCart(${item.id})">Add to Cart</button>
-                </div>
-            </div>
-        </div>
-    `).join("");
+    grid.innerHTML = visible.map((product, index) => {
+        const outOfStock = Number(product.stock) <= 0;
+        const image = product.image_url ? `<img src="${escapeHTML(product.image_url)}" alt="${escapeHTML(product.name)}" loading="lazy" onerror="this.remove()">` : "";
+        return `<article class="product-card" style="--card-index:${index}">
+            <div class="product-image image-tone-${index % 4}">${image}<span class="image-initials">${escapeHTML(product.name.slice(0, 1).toUpperCase())}</span><span class="product-category">${escapeHTML(categoryForProduct(product))}</span><button class="quick-add ${outOfStock ? "unavailable" : ""}" type="button" ${outOfStock ? "disabled" : ""} aria-label="${outOfStock ? "Out of stock" : `Add ${escapeHTML(product.name)} to bag`}" onclick="addToCart(${Number(product.id)})">${outOfStock ? "—" : "+"}</button></div>
+            <div class="product-details"><div class="product-title-row"><h3 class="product-title">${escapeHTML(product.name)}</h3><span class="price">₹${Number(product.price).toFixed(2)}</span></div>
+            <p class="product-desc">${escapeHTML(product.description || "Made to make your everyday a little better.")}</p><button class="add-link" type="button" ${outOfStock ? "disabled" : ""} onclick="addToCart(${Number(product.id)})">${outOfStock ? "Currently unavailable" : "Add to bag"} ${outOfStock ? "" : "<span>↗</span>"}</button></div>
+        </article>`;
+    }).join("");
 }
 
-// Cart Management
-function toggleCart() {
-    document.getElementById("cart-drawer").classList.toggle("open");
-    document.getElementById("cart-overlay").classList.toggle("open");
+function resetFilters() {
+    document.getElementById("product-search").value = "";
+    activeCategory = "All items";
+    renderCategoryFilters();
+    renderProducts();
+}
+
+function toggleCart(open) {
+    const drawer = document.getElementById("cart-drawer");
+    const shouldOpen = typeof open === "boolean" ? open : !drawer.classList.contains("open");
+    drawer.classList.toggle("open", shouldOpen);
+    document.getElementById("cart-overlay").classList.toggle("open", shouldOpen);
+    drawer.setAttribute("aria-hidden", String(!shouldOpen));
+    document.body.classList.toggle("cart-open", shouldOpen);
 }
 
 function addToCart(productId) {
-    const product = products.find(p => p.id === productId);
-    if (!product) return;
-
-    const existing = cart.find(c => c.id === productId);
+    const product = products.find(item => item.id === productId);
+    if (!product || product.stock <= 0) return;
+    const existing = cart.find(item => item.id === productId);
     if (existing) {
+        if (existing.quantity >= product.stock) return showToast("That’s all we have in stock.");
         existing.quantity += 1;
-    } else {
-        cart.push({ ...product, quantity: 1 });
-    }
+    } else cart.push({ id: product.id, name: product.name, price: Number(product.price), stock: Number(product.stock), quantity: 1 });
+    updateCartUI();
+    showToast(`${product.name} added to your bag`);
+}
+
+function changeQuantity(productId, adjustment) {
+    const item = cart.find(entry => entry.id === productId);
+    if (!item) return;
+    const product = products.find(entry => entry.id === productId);
+    item.quantity = Math.min(product ? Number(product.stock) : item.stock, item.quantity + adjustment);
+    if (item.quantity <= 0) cart = cart.filter(entry => entry.id !== productId);
     updateCartUI();
 }
 
 function updateCartUI() {
-    const cartCountEl = document.getElementById("cart-count");
-    const cartItemsEl = document.getElementById("cart-items");
-    const cartTotalEl = document.getElementById("cart-total");
-
     const totalCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-    const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-
-    cartCountEl.innerText = totalCount;
-    cartTotalEl.innerText = totalPrice.toFixed(2);
-
-    if (cart.length === 0) {
-        cartItemsEl.innerHTML = "<p style='color: #64748b;'>Your cart is empty.</p>";
-        return;
+    const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    document.getElementById("cart-count").textContent = totalCount;
+    document.getElementById("drawer-count").textContent = `(${totalCount})`;
+    document.getElementById("cart-total").textContent = total.toFixed(2);
+    document.getElementById("checkout-total").textContent = total.toFixed(2);
+    document.getElementById("checkout-btn").disabled = !cart.length;
+    const items = document.getElementById("cart-items");
+    if (!cart.length) {
+        items.innerHTML = '<div class="cart-empty"><span>⌁</span><h3>Your bag is taking a breather.</h3><p>Come across something you love?</p><button class="text-button" onclick="toggleCart(false);document.getElementById(\'catalog\').scrollIntoView({behavior:\'smooth\'})">Explore the collection →</button></div>';
+    } else {
+        items.innerHTML = cart.map(item => `<div class="cart-item"><div class="cart-item-main"><span class="mini-product-mark">${escapeHTML(item.name.charAt(0).toUpperCase())}</span><div><strong>${escapeHTML(item.name)}</strong><small>₹${item.price.toFixed(2)} each</small><div class="quantity-control"><button type="button" aria-label="Decrease quantity" onclick="changeQuantity(${Number(item.id)}, -1)">−</button><span>${item.quantity}</span><button type="button" aria-label="Increase quantity" onclick="changeQuantity(${Number(item.id)}, 1)">+</button></div></div></div><button class="remove-item" type="button" aria-label="Remove ${escapeHTML(item.name)}" onclick="removeFromCart(${Number(item.id)})">×</button></div>`).join("");
     }
-
-    cartItemsEl.innerHTML = cart.map(item => `
-        <div class="cart-item">
-            <div>
-                <strong>${item.name}</strong><br>
-                <small>Qty: ${item.quantity} × ₹${item.price.toFixed(2)}</small>
-            </div>
-            <span>₹${(item.price * item.quantity).toFixed(2)}</span>
-        </div>
-    `).join("");
+    localStorage.setItem("cloudstore-cart", JSON.stringify(cart));
 }
 
-// Checkout and Order Placement
-async function checkout() {
-    if (cart.length === 0) {
-        alert("Your cart is empty!");
-        return;
-    }
+function removeFromCart(productId) {
+    cart = cart.filter(item => item.id !== productId);
+    updateCartUI();
+}
 
-    const customerName = prompt("Enter your name:", "Rishabh Tiwari");
-    if (!customerName) return;
+function openCheckout() {
+    if (!cart.length) return;
+    document.getElementById("checkout-message").textContent = "";
+    toggleCart(false);
+    document.getElementById("checkout-dialog").showModal();
+}
 
-    const customerEmail = prompt("Enter your email address:", "rishabh@example.com");
-    if (!customerEmail) return;
+function closeCheckout() { document.getElementById("checkout-dialog").close(); }
 
-    const totalAmount = parseFloat(document.getElementById("cart-total").innerText);
-    const checkoutBtn = document.getElementById("checkout-btn");
-
+async function submitOrder(event) {
+    event.preventDefault();
+    if (!cart.length) return;
+    const form = event.currentTarget;
+    const button = document.getElementById("place-order-btn");
+    const message = document.getElementById("checkout-message");
     const orderData = {
-        customer_name: customerName,
-        customer_email: customerEmail,
-        total_amount: totalAmount
+        customer_name: form.elements.customer_name.value.trim(),
+        customer_email: form.elements.customer_email.value.trim(),
+        total_amount: Number(cart.reduce((sum, item) => sum + item.price * item.quantity, 0).toFixed(2)),
+        items: cart.map(({ id, quantity }) => ({ product_id: id, quantity }))
     };
-
+    button.disabled = true;
+    button.innerHTML = 'Placing your order <span>…</span>';
+    message.textContent = "";
     try {
-        checkoutBtn.disabled = true;
-        checkoutBtn.innerText = "Processing...";
-
-        const response = await fetch("/api/orders", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(orderData)
-        });
-
+        const response = await fetch("/api/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(orderData) });
         const result = await response.json();
-
-        if (response.status === 201 || response.status === 202) {
-            alert(`Order Placed Successfully!\nOrder Reference: ORD-${result.order_id}\nA confirmation email has been scheduled.`);
-            cart = [];
-            updateCartUI();
-            toggleCart();
-        } else {
-            alert(`Order processing error: ${result.error || result.message}`);
-        }
-    } catch (err) {
-        console.error("Checkout failure:", err);
-        alert("Failed to submit order. Check server connection.");
+        if (!response.ok && response.status !== 202) throw new Error(result.error || result.message || "We couldn’t place your order.");
+        const orderNumber = result.order_id ? `ORD-${result.order_id}` : "confirmed";
+        cart = [];
+        updateCartUI();
+        closeCheckout();
+        form.reset();
+        showToast(`Thanks! Your order ${orderNumber} is in.`);
+    } catch (error) {
+        message.textContent = error.message || "We couldn’t reach the store. Please try again.";
+        message.classList.add("error");
     } finally {
-        checkoutBtn.disabled = false;
-        checkoutBtn.innerText = "Checkout";
+        button.disabled = false;
+        button.innerHTML = 'Place order <span>→</span>';
     }
+}
+
+function showToast(text) {
+    const toast = document.getElementById("toast");
+    toast.textContent = text;
+    toast.classList.add("visible");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove("visible"), 2600);
+}
+
+function escapeHTML(value) {
+    return String(value).replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 }

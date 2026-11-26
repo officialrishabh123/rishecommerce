@@ -3,44 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Azure CloudStore</title>
+    <meta name="theme-color" content="#111827">
+    <title>CloudStore | Everyday tech, thoughtfully chosen</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <header class="navbar">
         <div class="container nav-content">
-            <h1 class="logo">CloudStore</h1>
-            <button class="cart-btn" onclick="toggleCart()">
-                Cart (<span id="cart-count">0</span>)
-            </button>
+            <a class="logo" href="#top" aria-label="CloudStore home"><span class="logo-mark">C</span>cloudstore<span class="logo-period">.</span></a>
+            <nav class="nav-links" aria-label="Main navigation"><a href="#catalog">Shop</a><a href="#promise">Our promise</a></nav>
+            <button class="cart-btn" type="button" onclick="toggleCart(true)" aria-label="Open shopping cart">Bag <span id="cart-count" class="cart-count">0</span></button>
         </div>
     </header>
 
-    <main class="container">
-        <h2>Featured Products</h2>
-        <div id="product-grid" class="product-grid">
-            <p>Loading products...</p>
-        </div>
+    <main id="top">
+        <section class="hero">
+            <div class="container hero-content">
+                <div class="hero-copy">
+                    <span class="eyebrow"><span class="eyebrow-dot"></span> GOOD TECH. GOOD EVERYDAY.</span>
+                    <h1>Little upgrades.<br><span>Big difference.</span></h1>
+                    <p>Useful tech and desk essentials, picked to make your everyday a little better.</p>
+                    <a class="hero-cta" href="#catalog">Explore the collection <span aria-hidden="true">↓</span></a>
+                </div>
+                <div class="hero-art" aria-label="Featured headphones and speaker" role="img">
+                    <div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div>
+                    <div class="art-sun"></div><div class="art-headphone"><span></span></div>
+                    <div class="art-speaker"><i></i><i></i></div>
+                    <div class="art-caption">MAKE ROOM<br>FOR BETTER.</div>
+                    <div class="art-label">CURATED TECH — VOL. 01</div>
+                </div>
+                <div class="hero-index">01 <span>/</span> 04</div>
+            </div>
+        </section>
+
+        <section class="catalog-section container" id="catalog">
+            <div class="section-heading">
+                <div><span class="eyebrow muted-eyebrow">THE GOOD STUFF</span><h2>Find your next <span>favourite.</span></h2></div>
+                <p id="result-count" class="result-count" aria-live="polite"></p>
+            </div>
+            <div class="catalog-tools">
+                <label class="search-box"><span aria-hidden="true">⌕</span><input id="product-search" type="search" placeholder="Search the collection" aria-label="Search products"><kbd>⌘ K</kbd></label>
+                <div id="category-filters" class="category-filters" aria-label="Filter by category"></div>
+                <label class="sort-control">Sort by <select id="sort-products" aria-label="Sort products"><option value="featured">Featured</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="name">Name: A to Z</option></select></label>
+            </div>
+            <div id="product-grid" class="product-grid" aria-live="polite"><div class="loading-state"><span class="loader"></span> Finding the good stuff…</div></div>
+        </section>
+
+        <section class="promise" id="promise"><div class="container promise-grid">
+            <div><span class="promise-icon">↗</span><div><h3>Picked with purpose</h3><p>Practical products that earn their place in your day.</p></div></div>
+            <div><span class="promise-icon">♡</span><div><h3>A little more considered</h3><p>Good design, useful details, and no unnecessary fuss.</p></div></div>
+            <div><span class="promise-icon">✳</span><div><h3>Here when you need us</h3><p>Questions about your order? We’re happy to help.</p></div></div>
+        </div></section>
+        <footer class="footer"><div class="container"><a class="logo" href="#top"><span class="logo-mark">C</span>cloudstore<span class="logo-period">.</span></a><span>Good tech for good days.</span><span>© <span id="year"></span> CloudStore</span></div></footer>
     </main>
 
-    <!-- Side Cart Drawer -->
-    <aside id="cart-drawer" class="cart-drawer">
-        <div class="cart-header">
-            <h3>Your Cart</h3>
-            <button class="close-btn" onclick="toggleCart()">&times;</button>
-        </div>
-        <div id="cart-items" class="cart-items">
-            <!-- Dynamic Cart Items -->
-        </div>
-        <div class="cart-footer">
-            <p><strong>Total: ₹<span id="cart-total">0.00</span></strong></p>
-            <button id="checkout-btn" class="btn-checkout" onclick="checkout()">Checkout</button>
-        </div>
+    <aside id="cart-drawer" class="cart-drawer" aria-label="Shopping cart" aria-hidden="true">
+        <div class="cart-header"><div><span class="eyebrow muted-eyebrow">YOUR PICKS</span><h2>Your bag <span id="drawer-count">(0)</span></h2></div><button class="close-btn" type="button" onclick="toggleCart(false)" aria-label="Close cart">×</button></div>
+        <div id="cart-items" class="cart-items"></div>
+        <div class="cart-footer"><div class="shipping-note"><span>✦</span> Packed with care, just for you.</div><div class="total-row"><span>Subtotal</span><strong>₹<span id="cart-total">0.00</span></strong></div><button id="checkout-btn" class="btn-checkout" type="button" onclick="openCheckout()">Continue to checkout <span>→</span></button><p class="checkout-footnote">Shipping calculated at checkout</p></div>
     </aside>
+    <div id="cart-overlay" class="cart-overlay" onclick="toggleCart(false)"></div>
 
-    <!-- Cart Overlay Backdrop -->
-    <div id="cart-overlay" class="cart-overlay" onclick="toggleCart()"></div>
+    <dialog id="checkout-dialog" class="checkout-dialog"><form id="checkout-form">
+        <button class="close-btn dialog-close" type="button" onclick="closeCheckout()" aria-label="Close checkout">×</button>
+        <span class="eyebrow muted-eyebrow">ALMOST YOURS</span><h2>Let’s get it <span>to you.</span></h2><p class="dialog-intro">Where should we send your order?</p>
+        <label class="field-label" for="customer-name">Your name</label><input class="checkout-input" id="customer-name" name="customer_name" autocomplete="name" required maxlength="150" placeholder="e.g. Rishabh Tiwari">
+        <label class="field-label" for="customer-email">Email address</label><input class="checkout-input" id="customer-email" name="customer_email" type="email" autocomplete="email" required maxlength="255" placeholder="you@example.com">
+        <div class="dialog-total"><span>Order total</span><strong>₹<span id="checkout-total">0.00</span></strong></div>
+        <button id="place-order-btn" class="btn-checkout" type="submit">Place order <span>→</span></button><p id="checkout-message" class="checkout-message" role="status"></p>
+    </form></dialog>
 
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="/static/js/main.js"></script>
 </body>
 </html>
